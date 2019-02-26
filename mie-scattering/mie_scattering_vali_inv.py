@@ -42,10 +42,11 @@ class mieScattering:
         self.fov = 30
         # position of the sphere
         self.ps = np.asarray(ps)
+        self.pp = pp
         # position of the focal point
         self.pf = np.asarray([0, 0, 0])
         # padding for displaying the figure
-        self.padding = 0
+        self.padding = 2
         # amplitude of the incoming electric field
         self.E0 = 1
         # in and out numerical aperture of the condenser
@@ -524,14 +525,15 @@ class mieScattering:
         Ei[rMag>=self.a] = 0
         # calculate the focused field
         Ef = np.ones((np.shape(Es)), dtype = np.complex128)
+        Ef *= np.exp(self.pp * 1j)
         # initaliza total E field
         Etot = np.zeros((self.simRes, self.simRes), dtype = np.complex128)
         # add different parts into the total field
-        Etot[rMag<self.a] = Ei[rMag<self.a]
-#        Etot[rMag<self.a] = 0
+#        Etot[rMag<self.a] = Ei[rMag<self.a]
+        Etot[rMag<self.a] = 0
         Etot[rMag>=self.a] = Es[rMag>=self.a] + Ef[rMag>=self.a]
 
-        return Etot, B, ordVec, hlkr_plcostheta, hl_kr, pl_costheta, hlr0, pre_B
+        return Etot, B, ordVec, hlkr_plcostheta, hl_kr, pl_costheta, hlr0, pre_B, Emask
     
     def BPF(self, halfgrid, simRes, NA_in, NA_out):
     #create a bandpass filter
@@ -608,12 +610,12 @@ def getTotalField(k, k_j, n, res, a, ps, pp, numSample, NA_in, NA_out, option):
     #initialize a mie scattering object
     MSI = mieScattering(k, k_j, n, res, a, ps, pp, numSample, NA_in, NA_out, option)  
     #get the field at the focal plane
-    Etot, Bt, ordVec, hlkrcos, hlkr, Plcos0, hlr0, pre_B= MSI.scatterednInnerField(MSI.lambDa, MSI.magk, MSI.n, MSI.rMag)
+    Etot, Bt, ordVec, hlkrcos, hlkr, Plcos0, hlr0, pre_B, Emask= MSI.scatterednInnerField(MSI.lambDa, MSI.magk, MSI.n, MSI.rMag)
     #apply a bandpass filter to simulate the field on the detector
 #    D_Et, D_Ef = MSI.imgAtDetec(Etot, Ef)
     rVecs = MSI.getrvecs()
 
-    return Etot, Bt, rVecs, ordVec, hlkrcos, hlkr, Plcos0, hlr0, pre_B
+    return Etot, Bt, rVecs, ordVec, hlkrcos, hlkr, Plcos0, hlr0, pre_B, Emask
     
 
 def coeff_b(l, k, n, a):
@@ -637,6 +639,70 @@ def coeff_b(l, k, n, a):
     # return ai * (bi - ci) / (di - ei)
     return (bi - ci) / (di - ei)
 
+
+#compute the coordinates grid in Fourier domain for the calculation of
+#corresponding phase shift value at each pixel
+#return the frequency components at z axis in Fourier domain
+def cal_kz(fov, simRes, n):
+    #the coordinates in Fourier domain is constructed from the coordinates in
+    #spatial domain, specifically,
+    #1. Get the pixel size in spatial domain, P_size = FOV / Image_Size
+    #2. Fourier domain size, F_size = 1 / P_size
+    #3. Make a grid with [-F_size / 2, F_size / 2, same resolution]
+    #4. Pixel size in Fourier domain will be 1 / Image_size
+    
+    #make grid in Fourier domain
+    x = np.linspace(-simRes/(fov * 2), simRes/(fov * 2), simRes)
+    xx, yy = np.meshgrid(x, x)
+    
+    #allocate the frequency components in x and y axis
+    k_xy = np.zeros((simRes, simRes, 2))
+    k_xy[..., 0], k_xy[..., 1] = xx, yy
+    
+    #compute the distance of x, y components in Fourier domain
+    k_para_square = k_xy[...,0]**2 + k_xy[...,1]**2
+    
+    #initialize a z-axis frequency components
+    k_z = np.zeros(xx.shape)
+    
+    #compute kz at each pixel
+    for i in range(len(k_para_square)):
+        for j in range(len(k_para_square)):
+            if k_para_square[i, j] <= np.abs(n) ** 2:
+                k_z[i, j] = np.sqrt(np.abs(n) ** 2 - k_para_square[i, j])
+    
+    #return it
+    return k_z
+
+
+#propogate the field with the specified frequency components and distance
+    # Et: the field in spatial domain to be propagated
+    # k_z: frequency component in z axis
+    # l: distance to propagate
+def propagate(Et, k_z, l):
+    
+    #compute the phase mask for shifting each pixel of the field
+    phaseMask = np.exp(1j * k_z * 2 * np.pi * l)
+    
+    #Fourier transform of the field and do fft-shift to the Fourier image
+    #so that the center of the Fourier transform is at the origin
+    E_orig = Et
+    fE_orig = np.fft.fft2(E_orig)
+    fE_shift = np.fft.fftshift(fE_orig)
+    
+    #apply phase shift to the field in Fourier domain
+    fE_propagated = fE_shift * phaseMask
+    
+    #inverse shift the image in Fourier domain
+    #then apply inverse Fourier transform the get the spatial image
+    fE_inversae_shift = np.fft.ifftshift(fE_propagated)
+    E_prop = np.fft.ifft2(fE_inversae_shift)
+    
+    #return the propagated field
+    return E_prop
+
+
+
 k = [0, 0, -1]
 res = 128
 numSample = 1
@@ -646,6 +712,9 @@ numFrames = 70
 option = 'Horizontal'
 parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v3'
 n0 = 1.22 + 0.03j
+fov = 30
+padding = 2
+simRes = (2 * padding + 1) * res
 
 #n0 = 1
 
@@ -657,77 +726,132 @@ a0 = 10
 #position of the visualization plane, along z axis
 pp = a0
 ps0 = [0, 0, 0]
-Et_0, B0, rVecs, ordVec, hlkrcos, hlkr0, Plcos0, hlr0, pre_B= getTotalField(k, k_j, n0, res, a0, ps0, pp, numSample, NA_in, NA_out, option)
+Et_0, B0, rVecs, ordVec, hlkrcos, hlkr0, Plcos0, hlr0, pre_B, Emask0= getTotalField(k, k_j, n0, res, a0, ps0, pp, numSample, NA_in, NA_out, option)
+
+#get the z component
+#can optimize the function here by passing in parameters
+k_z = cal_kz(fov, simRes, n0)
+
+Et_0_p = propagate(Et_0, k_z, -a0)
+
+Et_1, B1, rVecs1, ordVec1, hlkrcos1, hlkr1, Plcos1, hlr1, pre_B1, Emask1= getTotalField(k, k_j, n0, res, a0, ps0, 0, numSample, NA_in, NA_out, option)
+
+Et_0_p *= Emask1
+
 #get the field for the 1st sphere (small)
 
-B_david = coeff_b(ordVec, 2*np.pi, n0, 10)
+#B_david = coeff_b(ordVec, 2*np.pi, n0, 10)
 
 
-noise_perc = 200
-noise_mask = np.random.randint(-noise_perc, noise_perc, size = np.shape(Et_0)) / 1000000 + 1
+#noise_perc = 200
+#noise_mask = np.random.randint(-noise_perc, noise_perc, size = np.shape(Et_0)) / 1000000 + 1
+#
+#Et_plus_noise = Et_0 * noise_mask
 
-Et_plus_noise = Et_0 * noise_mask
-
-
-plt.figure()
-plt.subplot(211)
-plt.plot(np.real(np.squeeze(B0)), label = 'Shihao')
-plt.plot(np.real(B_david), linestyle = 'dashed', label = 'David')
-plt.title('B_real')
-plt.legend()
-
-plt.subplot(212)
-plt.plot(np.imag(np.squeeze(B0)), label = 'Shihao')
-plt.plot(np.imag(B_david), linestyle = 'dashed', label = 'David')
-plt.title('B_imag')
-plt.legend()
-
-plt.figure()
-plt.plot(np.real(np.squeeze(B0)), label = 'real')
-plt.plot(np.imag(np.squeeze(B0)), linestyle = 'dashed', label = 'imaginary')
-plt.title('B')
-plt.legend()
+#
+#plt.figure()
+#plt.subplot(211)
+#plt.plot(np.real(np.squeeze(B0)), label = 'Shihao')
+#plt.plot(np.real(B_david), linestyle = 'dashed', label = 'David')
+#plt.title('B_real')
+#plt.legend()
+#
+#plt.subplot(212)
+#plt.plot(np.imag(np.squeeze(B0)), label = 'Shihao')
+#plt.plot(np.imag(B_david), linestyle = 'dashed', label = 'David')
+#plt.title('B_imag')
+#plt.legend()
+#
+#plt.figure()
+#plt.plot(np.real(np.squeeze(B0)), label = 'real')
+#plt.plot(np.imag(np.squeeze(B0)), linestyle = 'dashed', label = 'imaginary')
+#plt.title('B')
+#plt.legend()
 
 
 plt.figure()
 plt.subplot(1, 3, 1)
-plt.imshow(np.abs(Et_0))
+plt.imshow(np.abs(Et_1))
 plt.title('Magnitude')
 plt.axis('off')
 plt.colorbar()
 
 plt.subplot(1, 3, 2)
-plt.imshow(np.real(Et_0))
+plt.imshow(np.real(Et_1))
 plt.title('Real')
 plt.axis('off')
 plt.colorbar()
 
 plt.subplot(1, 3, 3)
-plt.imshow(np.imag(Et_0))
+plt.imshow(np.imag(Et_1))
 plt.title('Imaginary')
 plt.axis('off')
 plt.colorbar()
 
-plt.suptitle('Field with sample')
+plt.suptitle('Field at 0')
 
 
 plt.figure()
 plt.subplot(1, 3, 1)
-plt.plot(np.abs(B0[0,0,:]))
-plt.xlabel('Number of Order')
-plt.ylabel('Value')
+plt.imshow(np.abs(Et_0_p))
 plt.title('Magnitude')
+plt.axis('off')
+plt.colorbar()
 
 plt.subplot(1, 3, 2)
-plt.plot(np.real(B0[0,0,:]))
-plt.xlabel('Number of Order')
-plt.ylabel('Value')
+plt.imshow(np.real(Et_0_p))
 plt.title('Real')
+plt.axis('off')
+plt.colorbar()
 
 plt.subplot(1, 3, 3)
-plt.plot(np.imag(B0[0,0,:]))
-plt.xlabel('Number of Order')
-plt.ylabel('Value')
+plt.imshow(np.imag(Et_0_p))
 plt.title('Imaginary')
+plt.axis('off')
+plt.colorbar()
 
-plt.suptitle('Coefficient B Ground Truth')
+plt.suptitle('Field propagated')
+
+plt.figure()
+plt.subplot(1, 3, 1)
+plt.imshow(np.abs(Et_0_p)-np.abs(Et_1))
+plt.title('Magnitude')
+plt.axis('off')
+plt.colorbar()
+
+plt.subplot(1, 3, 2)
+plt.imshow(np.real(Et_0_p)-np.real(Et_1))
+plt.title('Real')
+plt.axis('off')
+plt.colorbar()
+
+plt.subplot(1, 3, 3)
+plt.imshow(np.imag(Et_0_p)-np.imag(Et_1))
+plt.title('Imaginary')
+plt.axis('off')
+plt.colorbar()
+
+plt.suptitle('Field bias')
+
+
+#
+#plt.figure()
+#plt.subplot(1, 3, 1)
+#plt.plot(np.abs(B0[0,0,:]))
+#plt.xlabel('Number of Order')
+#plt.ylabel('Value')
+#plt.title('Magnitude')
+#
+#plt.subplot(1, 3, 2)
+#plt.plot(np.real(B0[0,0,:]))
+#plt.xlabel('Number of Order')
+#plt.ylabel('Value')
+#plt.title('Real')
+#
+#plt.subplot(1, 3, 3)
+#plt.plot(np.imag(B0[0,0,:]))
+#plt.xlabel('Number of Order')
+#plt.ylabel('Value')
+#plt.title('Imaginary')
+#
+#plt.suptitle('Coefficient B Ground Truth')
