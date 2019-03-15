@@ -657,10 +657,10 @@ NA_out = 0
 numFrames = 70
 option = 'Horizontal'
 parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v3'
-n0 = 1.2 + 0.02j
+n0 = 1.2
 #n0 = 1.0
-fov = 100
-padding = 2
+fov = 30
+padding = 0
 simRes = (2 * padding + 1) * res
 
 #get the field for the center sphere (big)
@@ -668,7 +668,7 @@ a0 = 10
 #position of the visualization plane, along z axis
 pp = 20
 ps0 = [0, 0, 0]
-Et_distance, B0, Emask0= getTotalField(k, k, n0, res, a0, ps0, 16, padding, fov, numSample, NA_in, NA_out, option)
+Et_distance, B0, Emask0= getTotalField(k, k, n0, res, a0, ps0, 15.5, padding, fov, numSample, NA_in, NA_out, option)
 
 #get the z component
 #can optimize the function here by passing in parameters

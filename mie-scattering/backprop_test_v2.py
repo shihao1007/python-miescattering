@@ -26,7 +26,7 @@ def cal_kz(fov, simRes):
     
     #make grid in Fourier domain
     
-    kfreq = sp.fftpack.fftfreq(simRes, fov/simRes)
+    kfreq = sp.fftpack.fftfreq(simRes, fov/simRes)*2
     
 #    x = np.linspace(-simRes/(fov * 2 * 2 * np.pi), simRes/(fov * 2 * 2 * np.pi), simRes)
     x = kfreq
@@ -49,14 +49,16 @@ def cal_kz(fov, simRes):
                 k_z[i, j] = np.sqrt(1 - k_para_square[i, j])
     
     #return it
-    return k_z
+    return k_z, kfreq
 
-fov = 40
+fov = 200
 res = 128
-padding = 2
+padding = 1
 simRes = (2*padding+1)*res
 
-kz = np.fft.fftshift(cal_kz(fov, simRes))
+kz, kfreq = cal_kz(fov, simRes)
+kz = np.fft.fftshift(kz)
+kfreq = np.fft.fftshift(kfreq)
 
 #lambDa = 2 * np.pi
 #
@@ -70,7 +72,7 @@ kz = np.fft.fftshift(cal_kz(fov, simRes))
 #
 #kz = np.sqrt(k ** 2 - kx ** 2 - ky ** 2)
 #
-d = 1
+d = 2
 
 coef = Et_close / Et_distance
 
@@ -79,8 +81,18 @@ Et_df = np.fft.fftshift(np.fft.fft2(Et_distance))
 Et_cf = np.fft.fftshift(np.fft.fft2(Et_close))
 
 coef_f = Et_cf / Et_df
+for i in range(np.shape(coef_f)[0]):
+    for j in range(np.shape(coef_f)[0]):
+        if np.abs(coef_f[i, j]) >= 4 or np.abs(coef_f[i, j]) <= -4:
+            coef_f[i, j] = 0
 
 phase_shift = np.exp(1j * d * kz)
+for i in range(np.shape(phase_shift)[0]):
+    for j in range(np.shape(phase_shift)[0]):
+        if kz[i, j] != 0:
+            phase_shift[i, j] /= kz[i, j]
+
+fft_error = coef_f - phase_shift
 
 Et_pf = Et_df * phase_shift
 Et_p = np.fft.ifft2(np.fft.ifftshift(Et_pf))
@@ -90,43 +102,103 @@ print(np.allclose(Et_p, Et_close))
 #v_min = -1
 #v_max = 0.3
 
-plt.figure()
-plt.subplot(321)
-plt.imshow(np.real(Et_p))
-plt.colorbar()
-plt.title('Real propagated')
-plt.subplot(322)
-plt.imshow(np.imag(Et_p))
-plt.colorbar()
-plt.title('Imag propagated')
-
-
-plt.subplot(323)
-plt.imshow(np.real(Et_close))
-plt.colorbar()
-plt.title('Real E close')
-plt.subplot(324)
-plt.imshow(np.imag(Et_close))
-plt.colorbar()
-plt.title('Imag E close')
-
-plt.subplot(325)
-plt.imshow(np.real(Et_close)-np.real(Et_p))
-plt.colorbar()
-plt.title('Real Error')
-plt.subplot(326)
-plt.imshow(np.imag(Et_close)-np.imag(Et_p))
-plt.colorbar()
-plt.title('Imag Error')
+#plt.figure()
+#plt.subplot(121)
+#plt.imshow(np.real(coef_f))
+#plt.colorbar()
+#plt.title('Real ratio fft')
+#plt.subplot(122)
+#plt.imshow(np.imag(coef_f))
+#plt.colorbar()
+#plt.title('Imag ratio fft')
 
 plt.figure()
 plt.subplot(121)
-plt.imshow(np.real(kz))
+plt.imshow(np.real(phase_shift))
+plt.xlabel('kx')
+plt.ylabel('ky')
+ax = plt.gca();
+ax.set_xticks(np.arange(0, np.shape(kfreq)[0], 48));
+ax.set_yticks(np.arange(0, np.shape(kfreq)[0], 48));
+ax.set_xticklabels(kfreq[::48]);
+ax.set_yticklabels(kfreq[::48]);
+plt.colorbar()
+plt.title('Real phase shift fft')
 plt.subplot(122)
-plt.imshow(np.imag(kz))
+plt.imshow(np.imag(phase_shift))
+plt.colorbar() 
+plt.title('Imag phase shift fft')
+#
+plt.figure()
+plt.subplot(331)
+plt.imshow(np.real(Et_p))
+plt.colorbar()
+plt.title('Real propagated')
+plt.subplot(332)
+plt.imshow(np.imag(Et_p))
+plt.colorbar()
+plt.title('Imag propagated')
+plt.subplot(333)
+plt.imshow(np.abs(Et_p))
+plt.colorbar()
+plt.title('Magnitude propagated')
+
+plt.subplot(334)
+plt.imshow(np.real(Et_close))
+plt.colorbar()
+plt.title('Real E close')
+plt.subplot(335)
+plt.imshow(np.imag(Et_close))
+plt.colorbar()
+plt.title('Imag E close')
+plt.subplot(336)
+plt.imshow(np.abs(Et_close))
+plt.colorbar()
+plt.title('Magnitude E close')
+
+#
+plt.subplot(337)
+plt.imshow(np.real(Et_close)-np.real(Et_distance))
+plt.colorbar()
+plt.title('Real Error')
+plt.subplot(338)
+plt.imshow(np.imag(Et_close)-np.imag(Et_distance))
+plt.colorbar()
+plt.title('Imag Error')
+plt.subplot(339)
+plt.imshow(np.abs(Et_close)-np.abs(Et_distance))
+plt.colorbar()
+plt.title('Magnitude Error')
+
+#
+plt.figure()
+plt.subplot(121)
+plt.imshow(np.real(fft_error))
+plt.title('Real fft coef error')
+plt.xlabel('kx')
+plt.ylabel('ky')
+ax = plt.gca();
+ax.set_xticks(np.arange(0, np.shape(kfreq)[0], 48));
+ax.set_yticks(np.arange(0, np.shape(kfreq)[0], 48));
+ax.set_xticklabels(kfreq[::48]);
+ax.set_yticklabels(kfreq[::48]);
+plt.colorbar()
+plt.subplot(122)
+plt.imshow(np.imag(fft_error))
+plt.title('Imag fft coef error')
+plt.xlabel('kx')
+plt.ylabel('ky')
+ax = plt.gca();
+ax.set_xticks(np.arange(0, np.shape(kfreq)[0], 48));
+ax.set_yticks(np.arange(0, np.shape(kfreq)[0], 48));
+ax.set_xticklabels(kfreq[::48]);
+ax.set_yticklabels(kfreq[::48]);
+plt.colorbar()
+
+
 
 #plt.figure()
 #plt.subplot(121)
-#plt.imshow(np.real(phase_shift))
+#plt.imshow(np.real(kz))
 #plt.subplot(122)
-#plt.imshow(np.imag(phase_shift))
+#plt.imshow(np.imag(kz))
