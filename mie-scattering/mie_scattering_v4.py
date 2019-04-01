@@ -33,7 +33,7 @@ import random
 class mieScattering:
     
     # parameters used to calculate the fields
-    def __init__(self, k, n, res, a, numSample, NA_in, NA_out, option = 'Horizontal'):
+    def __init__(self, k, n, res, a, numSample, NA_in, NA_out, fov, option = 'Horizontal'):
         # n is the refractive index of the sphere. The n of the surrounding material is 1.0
         self.n = n
         # a is the radius of the sphere, for calculation precision perposes, 
@@ -42,13 +42,13 @@ class mieScattering:
         # number of Monte Carlo sampling, 1000 is fine, simulation time cost grows linearly with this variable
         self.numSample = numSample
         # field of view, the total length of the field, say 10 microns
-        self.fov = 12
+        self.fov = fov
         # position of the sphere
         self.ps = np.asarray([0, 0, 0])
         # position of the focal point
         self.pf = np.asarray([0, 0, 0])
         # padding for displaying the figure
-        self.padding = 1
+        self.padding = 0
         # amplitude of the incoming electric field
         self.E0 = 1
         # in and out numerical aperture of the condenser
@@ -66,7 +66,7 @@ class mieScattering:
         # specify the direction of the incoming light
         self.k = np.asarray(k)
         # specify the wavelength of the incident light
-        self.lambDa = 2.8554
+        self.lambDa = 1
         # magnitude of the k vector
         self.magk = 2*np.pi/self.lambDa
         # kvector
@@ -80,7 +80,7 @@ class mieScattering:
         # halfgrid is the size of a half grid
         self.halfgrid = np.ceil(self.fov/2)*(2*self.padding +1)
         # range of x, y
-        gx = np.linspace(-self.halfgrid, +self.halfgrid-1, self.simRes)
+        gx = np.linspace(-self.halfgrid, +self.halfgrid, self.simRes)
         gy = gx
         # option is the way the field is rendered
         # 'Horizontal' means the light is from inside of the screen to the outside
@@ -594,7 +594,7 @@ class mieScattering:
         
         #initialize cropping
         cropsize = self.padding * self.res
-        startIdx = int(np.fix(self.simRes /2 + 1) - np.floor(cropsize/2))
+        startIdx = int(np.fix(self.simRes /2) - np.floor(cropsize/2))
         endIdx = int(startIdx + cropsize - 1)
         
         #save the field
@@ -608,67 +608,106 @@ class mieScattering:
     
         return Et_bpf, Ef_bpf
         
-def getTotalField(k, n, res, a, numSample, NA_in, NA_out, option):
+def getTotalField(k, n, res, a, numSample, NA_in, NA_out, fov, option):
     #root function to get the final field by call other children functions
     
     #initialize a mie scattering object
-    MSI = mieScattering(k, n, res, a, numSample, NA_in, NA_out, option)  
+    MSI = mieScattering(k, n, res, a, numSample, NA_in, NA_out, fov, option)  
     #get the field at the focal plane
     Ef, Etot = MSI.scatterednInnerField(MSI.lambDa, MSI.magk, MSI.n, MSI.rMag)
     #apply a bandpass filter to simulate the field on the detector
-    D_Et, D_Ef = MSI.imgAtDetec(Etot, Ef)
+#    D_Et, D_Ef = MSI.imgAtDetec(Etot, Ef)
 
-    return Ef, Etot, D_Et, D_Ef
+    return Ef, Etot
     
 
 k = [0, 0, -1]
-res = 100
-a = 5
-numSample = 1000
+res = 128
+a = 1
+fov = 16
+numSample = 100
 NA_in = 0
-NA_out = 0.6
-numFrames = 70
+NA_out = 0.01
+numFrames = 1
 parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v2'
+n=1.5 + 0.03j
 
-n0 = 1.0 #+ 0.000258604 * 1j
-N = [n0 + i*0.02 for i in range(numFrames)]
+Ef_v, Et_v = getTotalField(k, n, res, a, numSample, NA_in, NA_out, fov, 'Vertical')
+Ef_h, Et_h = getTotalField(k, n, res, a, numSample, NA_in, NA_out, fov, 'Horizontal')
 
-Et_v = np.zeros((res*3, res*3, numFrames), dtype = np.complex128)
-Ef_v = np.zeros(Et_v.shape, dtype = np.complex128)
-Dt_v = np.zeros(Et_v.shape, dtype = np.complex128)
-Df_v = np.zeros(Et_v.shape, dtype = np.complex128)
+Ef_v *= 1000
+Et_v *= 1000
+Ef_h = np.ones(Ef_v.shape) * 0.314
+Et_h *= 1000
 
-Et_h = np.zeros((res*3, res*3, numFrames), dtype = np.complex128)
-Ef_h = np.zeros(Et_h.shape, dtype = np.complex128)
-Dt_h = np.zeros(Et_h.shape, dtype = np.complex128)
-Df_h = np.zeros(Et_h.shape, dtype = np.complex128)
+plt.figure()
+plt.set_cmap('RdYlBu')
+plt.subplot(1, 3, 1)
+plt.imshow(np.real(Ef_v), extent = [-fov/2, fov/2, -fov/2, fov/2])
+#plt.title('Total Field Vertical')
+#plt.axis('off')
+plt.colorbar()
 
-for i, n in enumerate(N):
-    Ef_v[:,:,i], Et_v[:,:,i], Dt_v[:,:,i], Df_v[:,:,i] = getTotalField(k, n, res, a, numSample, NA_in, NA_out, 'Vertical')
-#    Et_h[:,:,i], Ef_h[:,:,i], Dt_h[:,:,i], Df_h[:,:,i] = getTotalField(k, n, res, a, numSample, NA_in, NA_out, 'Horizontal')
+#plt.subplot(1, 4, 2)
+#plt.imshow(np.real(Ef_h))
+##plt.title('Total Field Horizontal')
+#plt.axis('off')
+#plt.colorbar()
 
-fileDir_Et_v = parentDir + '\\' + 'Et_v.npy'
-np.save(fileDir_Et_v, Et_v)
+plt.subplot(1, 3, 2)
+plt.imshow(np.real(Et_v), extent = [-fov/2, fov/2, -fov/2, fov/2])
+#plt.title('Incident Field Vertical')
+#plt.axis('off')
+plt.colorbar()
 
-fileDir_Ef_v = parentDir + '\\' + 'Ef_v.npy'
-np.save(fileDir_Ef_v, Ef_v)
-
-fileDir_Dt_v = parentDir + '\\' + 'Dt_v.npy'
-np.save(fileDir_Dt_v, Dt_v)
-
-fileDir_Df_v = parentDir + '\\' + 'Df_v.npy'
-np.save(fileDir_Df_v, Df_v)
-
+plt.subplot(1, 3,3)
+plt.imshow(np.real(Et_h), extent = [-fov/2, fov/2, -fov/2, fov/2])
+#plt.title('Incident Field Horizontal')
+#plt.axis('off')
+plt.colorbar()
+#%%
+# old code
+#
+#
+#n0 = 1.0 #+ 0.000258604 * 1j
+#N = [n0 + i*0.02 for i in range(numFrames)]
+#
+#Et_v = np.zeros((res*3, res*3, numFrames), dtype = np.complex128)
+#Ef_v = np.zeros(Et_v.shape, dtype = np.complex128)
+#Dt_v = np.zeros(Et_v.shape, dtype = np.complex128)
+#Df_v = np.zeros(Et_v.shape, dtype = np.complex128)
+#
+#Et_h = np.zeros((res*3, res*3, numFrames), dtype = np.complex128)
+#Ef_h = np.zeros(Et_h.shape, dtype = np.complex128)
+#Dt_h = np.zeros(Et_h.shape, dtype = np.complex128)
+#Df_h = np.zeros(Et_h.shape, dtype = np.complex128)
+#
+#for i, n in enumerate(N):
+#    Ef_v[:,:,i], Et_v[:,:,i], Dt_v[:,:,i], Df_v[:,:,i] = getTotalField(k, n, res, a, numSample, NA_in, NA_out, 'Vertical')
+##    Et_h[:,:,i], Ef_h[:,:,i], Dt_h[:,:,i], Df_h[:,:,i] = getTotalField(k, n, res, a, numSample, NA_in, NA_out, 'Horizontal')
+#
+#fileDir_Et_v = parentDir + '\\' + 'Et_v1.npy'
+#np.save(fileDir_Et_v, Et_v)
+#
+#fileDir_Ef_v = parentDir + '\\' + 'Ef_v1.npy'
+#np.save(fileDir_Ef_v, Ef_v)
+#
+##fileDir_Dt_v = parentDir + '\\' + 'Dt_v1.npy'
+##np.save(fileDir_Dt_v, Dt_v)
 ##
-_min, _max = np.amin(np.abs(Dt_v)), np.amax(np.abs(Dt_v))
-fig = plt.figure()
-
-img = []
-for i in range(70):
-    img.append([plt.imshow(np.abs(Dt_v[:,:,i]), vmax = _max, vmin = _min)])
-
-ani = animation.ArtistAnimation(fig,img,interval=125)
-writer = animation.writers['ffmpeg'](fps=8)
-ani.save(parentDir + '\\Dt_v.mp4',writer=writer)
+##fileDir_Df_v = parentDir + '\\' + 'Df_v1.npy'
+##np.save(fileDir_Df_v, Df_v)
+#
+###
+#_min, _max = np.amin(np.abs(Et_v)), np.amax(np.abs(Et_v))
+#fig = plt.figure()
+#
+#img = []
+#for i in range(70):
+#    img.append([plt.imshow(np.abs(Et_v[:,:,i]), vmax = _max, vmin = _min)])
+#
+#ani = animation.ArtistAnimation(fig,img,interval=125)
+#writer = animation.writers['ffmpeg'](fps=8)
+#ani.save(parentDir + '\\Et_v1.mp4',writer=writer)
 
 

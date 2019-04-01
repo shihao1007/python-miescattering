@@ -172,7 +172,7 @@ def cal_Et_far_field(a, n, k, k_dir, res, fov, working_dis, scale_factor):
     E_incident = Ei[0, ...]
     Et = E_scattering + E_incident
     
-    return Et, E_scattering, E_scatter_fftshift
+    return Et, E_scattering, E_scatter_fftshift, scatter_matrix
 
 def BPF(halfgrid, simRes, NA_in, NA_out):
     #create a bandpass filter
@@ -259,7 +259,7 @@ k_dir = [0, 0, -1]          # propagation direction of the plane wave
 E = [1, 0, 0]               # electric field vector
 
 #%%
-E_t, E_scattering, E_scatter_fftshift = cal_Et_far_field(a, n, k, k_dir,
+E_t, E_scattering, E_scatter_fftshift, scatter_matrix = cal_Et_far_field(a, n, k, k_dir,
                                                     res, fov,
                                                     working_dis, scale_factor)
 simRes = res * (2 * padding + 1)

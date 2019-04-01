@@ -92,7 +92,7 @@ class mieScattering:
         # specify the direction of the incoming light
         self.k = np.asarray(k)
         # specify the wavelength of the incident light
-        self.lambDa = 2 * np.pi
+        self.lambDa = 1
         # magnitude of the k vector
         self.magk = 2*np.pi/self.lambDa
         # kvector
@@ -473,8 +473,8 @@ class mieScattering:
         # initaliza total E field
         Etot = np.zeros((self.simRes, self.simRes), dtype = np.complex128)
         # add different parts into the total field
-#        Etot[rMag<self.a] = Ei[rMag<self.a]
-        Etot[rMag<self.a] = 0
+        Etot[rMag<self.a] = Ei[rMag<self.a]
+#        Etot[rMag<self.a] = 0
 #        Etot[rMag<self.a] = Es[rMag<self.a] + Ef[rMag<self.a]
         Etot[rMag>=self.a] = Es[rMag>=self.a] + Ef[rMag>=self.a]
 
@@ -659,16 +659,16 @@ option = 'Horizontal'
 parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v3'
 n0 = 1.2
 #n0 = 1.0
-fov = 30
+fov = 8
 padding = 0
 simRes = (2 * padding + 1) * res
 
 #get the field for the center sphere (big)
-a0 = 10
+a0 = 1
 #position of the visualization plane, along z axis
-pp = 20
+pp = 0
 ps0 = [0, 0, 0]
-Et_distance, B0, Emask0= getTotalField(k, k, n0, res, a0, ps0, 15.5, padding, fov, numSample, NA_in, NA_out, option)
+Et_distance, B0, Emask0= getTotalField(k, k, n0, res, a0, ps0, pp, padding, fov, numSample, NA_in, NA_out, option)
 
 #get the z component
 #can optimize the function here by passing in parameters
@@ -676,7 +676,7 @@ Et_distance, B0, Emask0= getTotalField(k, k, n0, res, a0, ps0, 15.5, padding, fo
 
 #Et_0_p = propagate(Et_0, k_z, -a0)
 
-Et_close, B1, Emask1= getTotalField(k, k, n0, res, a0, ps0, 15, padding, fov, numSample, NA_in, NA_out, option)
+Et_close, B1, Emask1= getTotalField(k, k, n0, res, a0, ps0, pp, padding, fov, numSample, NA_in, NA_out, 'Vertical')
 
 #Et_distance *= Emask1
 
