@@ -79,7 +79,7 @@ class mieScattering:
         # padding for displaying the figure
         self.padding = padding
         # amplitude of the incoming electric field
-        self.E0 = 1
+        self.E0 = 0
         self.E = np.asarray([1, 0, 0]) * self.E0
         # in and out numerical aperture of the condenser
         # for refractive lens, NA_in = 0
@@ -749,8 +749,8 @@ option = 'Horizontal'
 parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v3'
 n0 = 1.2 + 0.02j
 #n0 = 1.0
-fov = 40
-padding = 2
+fov = 16
+padding = 1
 simRes = (2 * padding + 1) * res
 
 #n0 = 1
@@ -763,7 +763,7 @@ a0 = 10
 #position of the visualization plane, along z axis
 pp = 20
 ps0 = [0, 0, 0]
-Et_distance, B0, rVecs, ordVec, hlkrcos, hlkr0, Plcos0, hlr0, pre_B, Emask0= getTotalField(k, k_j, n0, res, a0, ps0, 16, padding, numSample, NA_in, NA_out, option)
+#Et_distance, B0, rVecs, ordVec, hlkrcos, hlkr0, Plcos0, hlr0, pre_B, Emask0= getTotalField(k, k_j, n0, res, a0, ps0, 16, padding, numSample, NA_in, NA_out, option)
 
 #get the z component
 #can optimize the function here by passing in parameters
@@ -806,26 +806,26 @@ Et_close, B1, rVecs1, ordVec1, hlkrcos1, hlkr1, Plcos1, hlr1, pre_B1, Emask1= ge
 #plt.legend()
 plt.figure()
 
-plt.subplot(2, 2, 1)
+#plt.subplot(2, 2, 1)
+#plt.imshow(np.real(Et_close))
+#plt.title('Real close')
+#plt.axis('off')
+#plt.colorbar()
+#
+#plt.subplot(2, 2, 2)
+#plt.imshow(np.imag(Et_close))
+#plt.title('Imaginary close')
+#plt.axis('off')
+#plt.colorbar()
+
+plt.subplot(1, 2, 1)
 plt.imshow(np.real(Et_close))
-plt.title('Real close')
-plt.axis('off')
-plt.colorbar()
-
-plt.subplot(2, 2, 2)
-plt.imshow(np.imag(Et_close))
-plt.title('Imaginary close')
-plt.axis('off')
-plt.colorbar()
-
-plt.subplot(2, 2, 3)
-plt.imshow(np.real(Et_distance))
 plt.title('Real at distance')
 plt.axis('off')
 plt.colorbar()
 
-plt.subplot(2, 2, 4)
-plt.imshow(np.imag(Et_distance))
+plt.subplot(1, 2, 2)
+plt.imshow(np.imag(Et_close))
 plt.title('Imaginary at distance')
 plt.axis('off')
 plt.colorbar()

@@ -1,31 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat Mar  9 14:02:59 2019
+Created on Thu Apr  4 15:45:13 2019
 
-Calculate the scattering field of a sphere
-
-The position of the visualization plane is at the plane where right 
-across the center of the sphere at the origin
-
-To avoid back progation, the simulation is done by,
-First,  create a far field model in the Fourier domain, which can be done by:
-    
-    1. Replace the Hankel function of the first kind by its asymptotic form
-    2. Transform Legendre polynomial into Fourier Domain
-
-Then, apply an inverse Fourier transform to the far field model to get the
-near field scattering field
+Instead of simulate the whole image which is radiant symmetrical,
+A line in the far field is simulated
+The near field line simulation is converted from the far field line
+through a Hankel transform 
 
 Editor:
     Shihao Ran
     STIM Laboratory
 """
-
+import time
 import numpy as np
 import scipy as sp
 import scipy.special
 import math
 import matplotlib.pyplot as plt
+from hankel import HankelTransform
 
 #%%
 # Calculate the sphere scattering coefficients
@@ -95,8 +87,8 @@ def cal_Et_far_field(a, n, k, k_dir, res, fov, working_dis, scale_factor):
     
     # simulation resolution
     # in order to do fft and ifft, expand the image use padding
-    simRes = res*(2*padding + 1)
-    simFov = fov*(2*padding + 1)
+    simRes = int(res*(2*padding + 1))
+    simFov = int(fov*(2*padding + 1))
     # halfgrid is the size of a half grid
     halfgrid = np.ceil(simFov/2)
     # range of x, y
@@ -172,7 +164,7 @@ def cal_Et_far_field(a, n, k, k_dir, res, fov, working_dis, scale_factor):
     E_incident = Ei[0, ...]
     Et = E_scattering + E_incident
     
-    return Et, E_scattering, E_scatter_fftshift, scatter_matrix, E_scatter_fft, hlkr_asym
+    return Et, E_scattering, E_scatter_fftshift
 
 def BPF(halfgrid, simRes, NA_in, NA_out):
     #create a bandpass filter
@@ -238,7 +230,8 @@ def new_bpf(simFov, simRes, NA_in, NA_out):
     
 def imgAtDetec(Etot, bpf):
     #2D fft to the total field
-    Et_d = np.fft.fft2(Etot)
+    Et_d = np.fft.fft2(np.fft.fftshift(Etot))
+#    Et_return = np.fft.fft2(Etot)
 #    Ef_d = np.fft.fft2(Ef)
     
     #apply bandpass filter to the fourier domain
@@ -246,7 +239,7 @@ def imgAtDetec(Etot, bpf):
 #    Ef_d *= bpf
     
     #invert FFT back to spatial domain
-    Et_bpf = np.fft.ifft2(Et_d)
+    Et_bpf = np.fft.fftshift(np.fft.ifft2(Et_d))
 #    Ef_bpf = np.fft.ifft2(Ef_d)
     
     #initialize cropping
@@ -259,7 +252,7 @@ def imgAtDetec(Etot, bpf):
 #    D_Ef = np.zeros((cropsize, cropsize), dtype = np.complex128)
 #    D_Ef = Ef_bpf[startIdx:endIdx, startIdx:endIdx]
 
-    return Et_bpf
+    return D_Et, Et_d
 
 #%%
 # set the size and resolution of both planes
@@ -267,61 +260,98 @@ fov = 16                    # field of view
 res = 128                   # resolution
 a = 1                       # radius of the spere
 lambDa = 1                  # wavelength
-n = 1.5 + 1j*0.01            # refractive index
+n = 1.25 + 0.03j            # refractive index
 k = 2 * math.pi / lambDa    # wavenumber
-padding = 3                 # padding
-working_dis = 10000 * (2 * padding + 1)           # working distance
+padding = 3                # padding
+working_dis = int(10000 * (padding * 2 + 1))          # working distance
 scale_factor = working_dis * 2 * math.pi * res/fov            # scale factor of the intensity
-NA_in = 0.3
-NA_out = 0.6
+NA_in = 0.0
+NA_out = 0.5
 
 ps = [0, 0, 0]              # position of the sphere
 k_dir = [0, 0, -1]          # propagation direction of the plane wave
 E = [1, 0, 0]               # electric field vector
 
 #%%
-E_t, E_scattering, E_scatter_fftshift, scatter_matrix, E_scatter_fft, hlkr_asym = cal_Et_far_field(a, n, k, k_dir,
-                                                    res, fov,
-                                                    working_dis, scale_factor)
-simRes = res * (2 * padding + 1)
-simFov = fov * (2 * padding + 1)
+start = time.time()
+E_t, E_scattering, E_scatter_fftshift = cal_Et_far_field(a, n, k, k_dir,
+                                                         res, fov,
+                                                         working_dis, scale_factor)
+
+end = time.time()
+print(end-start)
+simRes = int(res * (2 * padding + 1))
+simFov = int(fov * (2 * padding + 1))
 halfgrid = np.ceil(simFov/2)
 bpf = BPF(halfgrid, simRes, NA_in, NA_out)
-new_bpf = new_bpf(simFov, simRes, NA_in, NA_out)
+bpf_new = new_bpf(simFov, simRes, NA_in, NA_out)
 
-E_t_bandpass = imgAtDetec(E_t, new_bpf)
+E_t_bandpass, Et_f = imgAtDetec(E_t, bpf_new)
 
 fx_axis = np.fft.fftshift(np.fft.fftfreq(simRes, simFov/simRes))
 
+##%%
+#plt.figure()
+#plt.subplot(141)
+#plt.imshow(np.real(E_t), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
+#plt.title('Fourier Domain, Real')
+#plt.colorbar()
+##plt.axis('off')
+#
+#plt.subplot(142)
+#plt.imshow(np.real(np.fft.fftshift(bpf_new)), extent = [fx_axis[0], fx_axis[-1], fx_axis[0], fx_axis[-1]])
+#plt.title('Fourier Domain, Real')
+#plt.colorbar()
+#
+#plt.subplot(143)
+#plt.imshow(np.real(np.fft.fftshift(Et_f)), extent = [fx_axis[0], fx_axis[-1], fx_axis[0], fx_axis[-1]])
+#plt.title('Total, Real')
+#plt.colorbar()
+##plt.axis('off')
+#
+#plt.subplot(144)
+#plt.imshow(np.real(E_t_bandpass), extent=[-fov/2, fov/2, -fov/2, fov/2])
+#plt.title('Filtered Image, Real')
+#plt.colorbar()
+
+#plt.tight_layout()
+
 #%%
-plt.figure()
-plt.set_cmap('RdYlBu')
-plt.subplot(121)
-plt.imshow(np.real(E_scatter_fftshift), extent = [fx_axis[0], fx_axis[-1], fx_axis[0], fx_axis[-1]])
-plt.title('Fourier Domain, Real')
-plt.colorbar()
-
-#plt.subplot(232)
-#plt.imshow(np.imag(E_scatter_fftshift), extent = [fx_axis[0], fx_axis[-1], fx_axis[0], fx_axis[-1]])
-#plt.title('Fourier Domain, Imaginary')
-#plt.colorbar()
+length = int(simRes/2)
+center_idx = int(simRes/2)
+E_near = np.fft.ifftshift(np.fft.fft2(np.fft.fftshift(E_scatter_fftshift)))
+near_line_gt = E_near[center_idx, center_idx:center_idx+length]
+far_line = E_scatter_fftshift[center_idx, center_idx:center_idx+length]
 #
-#plt.subplot(233)
-#plt.imshow(np.abs(E_scatter_fftshift), extent = [fx_axis[0], fx_axis[-1], fx_axis[0], fx_axis[-1]])
-#plt.title('Fourier Domain, Abs')
-#plt.colorbar()
+#plt.figure()
+#plt.subplot(211)
+#plt.title('Near Field 2-D Real')
+#plt.imshow(np.real(E_near), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
+#plt.subplot(212)
+#plt.title('Near Field 1-D Profile')
+#plt.plot(np.real(near_line_gt), label='Real')
+#plt.plot(np.imag(near_line_gt), label='Imaginary')
+#plt.xlabel('Pixel Index')
+#plt.ylabel('Intensity')
+#plt.legend()
 
-plt.subplot(122)
-plt.imshow(np.real(E_scattering), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
-plt.title('Scatter Field, Real')
-plt.colorbar()
-
-#plt.subplot(235)
-#plt.imshow(np.imag(E_scattering), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
-#plt.title('Scatter Field, Imaginary')
-#plt.colorbar()
+#%%
+#x = np.linspace(-simFov/2, simFov/2, simRes)[int(simRes/2):]
+#y_r = np.real(far_line)
+#y_i = np.imag(far_line)
 #
-#plt.subplot(236)
-#plt.imshow(np.abs(E_scattering), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
-#plt.title('Scatter Field, Abs')
-#plt.colorbar()
+#from scipy.interpolate import InterpolatedUnivariateSpline as Spline
+#
+#f_r = Spline(x, y_r, k=1)
+#f_i = Spline(x, y_i, k=1)
+#xf = np.linspace(-simFov/2, simFov/2, simRes*20)[int(simRes*20/2):]
+#
+#plt.figure()
+#plt.plot(x, y_r, marker='.', linestyle='none', alpha=0.7, color='blue', ms=3)
+#plt.plot(xf, f_r(xf), color='cyan', alpha=0.5, label='Real')
+#plt.plot(x, y_i, marker='.', linestyle='none', alpha=0.7, color='red', ms=3)
+#plt.plot(xf, f_i(xf), color='orange', alpha=0.5, label='Imaginary')
+#plt.title('Curve Fit')
+#plt.legend()
+#plt.show()
+
