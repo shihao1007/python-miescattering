@@ -627,9 +627,9 @@ def getTotalField(k, k_j, n, res, a, ps, pp, numSample, NA_in, NA_out, option):
 
 k = [0, 0, -1]
 res = 100
-numSample = 2000
+numSample = 200
 NA_in = 0
-NA_out = 0.3
+NA_out = 0.6
 numFrames = 70
 option = 'Horizontal'
 parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v3'
@@ -652,27 +652,25 @@ Et_2, Emask2, Ef = getTotalField(k, k_j, n0, res, a2, ps2, pp, numSample, NA_in,
 Et = Et_1 + Et_2
 #Et *= Emask1 * Emask2
 
-
+#%%
 plt.figure()
+plt.set_cmap('RdYlBu')
 plt.subplot(1,3,1)
 plt.imshow(np.abs(Et_1))
 plt.title('1st Sphere')
-plt.set_cmap('viridis')
 plt.axis('off')
 #plt.colorbar()
 
 plt.subplot(1,3,2)
 plt.imshow(np.abs(Et_2))
 plt.title('2nd Sphere')
-plt.set_cmap('viridis')
 plt.axis('off')
 #plt.colorbar()
 
 plt.subplot(1,3,3)
 plt.imshow(np.abs(Et))
 plt.title('Two Spheres')
-plt.set_cmap('viridis')
 plt.axis('off')
-#plt.colorbar()
+plt.colorbar()
 
 plt.suptitle('Image Plane at z = '+str(pp))

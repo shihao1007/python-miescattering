@@ -22,6 +22,7 @@ from matplotlib import pyplot as plt
 from pyquaternion import Quaternion
 # scipy for input/output files
 import scipy as sp
+import scipy.special
 # math for calculations
 import math
 # import animation for plot animations
@@ -630,7 +631,7 @@ def getTotalField(k, k_j, n, res, a, ps, pp, numSample, NA_in, NA_out, option):
 
 k = [0, 0, -1]
 res = 100
-numSample = 2000
+numSample = 200
 NA_in = 0
 NA_out = 0.9
 numFrames = 70
@@ -664,40 +665,39 @@ Et = Et_0 + Et_1 + Et_2 + Et_3
 #Et *= Emask1 * Emask2
 
 
+#%%
+
 plt.figure()
+plt.set_cmap('RdYlBu')
+
 plt.subplot(1,5,1)
 plt.imshow(np.abs(Et_0))
 plt.title('Center Sphere')
-plt.set_cmap('viridis')
 plt.axis('off')
 #plt.colorbar()
 
 plt.subplot(1,5,2)
 plt.imshow(np.abs(Et_1))
 plt.title('1st Sphere')
-plt.set_cmap('viridis')
 plt.axis('off')
 #plt.colorbar()
 
 plt.subplot(1,5,3)
 plt.imshow(np.abs(Et_2))
 plt.title('2nd Sphere')
-plt.set_cmap('viridis')
 plt.axis('off')
 #plt.colorbar()
 
 plt.subplot(1,5,4)
 plt.imshow(np.abs(Et_3))
 plt.title('3rd Sphere')
-plt.set_cmap('viridis')
 plt.axis('off')
 #plt.colorbar()
 
 plt.subplot(1,5,5)
 plt.imshow(np.abs(Et))
 plt.title('All Spheres')
-plt.set_cmap('viridis')
 plt.axis('off')
-#plt.colorbar()
+plt.colorbar()
 
 plt.suptitle('Image Plane at z = '+str(pp))

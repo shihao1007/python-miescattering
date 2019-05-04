@@ -196,14 +196,14 @@ def cal_Es_far_field(a, n, k, k_dir, simRes, simFov, working_dis, scale_factor):
 
 #%%
 # set the size and resolution of both planes
-fov = 16                    # field of view
-res = 512                   # resolution
+fov = 32                    # field of view
+res = 256                   # resolution
 a = 1                       # radius of the spere
 lambDa = 1                  # wavelength
-n = 1.6            # refractive index
+n = 1.5            # refractive index
 k = 2 * math.pi / lambDa    # wavenumber
 padding = 0                 # padding
-working_dis = 1000          # working distance
+working_dis = 100000 * (2 * padding + 1)         # working distance
 scale_factor = working_dis * 2 * math.pi * (res/fov)            # scale factor of the intensity
 # simulation resolution
 # in order to do fft and ifft, expand the image use padding
@@ -212,16 +212,17 @@ simFov = fov*(2*padding + 1)
 ps = [0, 0, 0]              # position of the sphere
 k_dir = [0, 0, -1]          # propagation direction of the plane wave
 
-
+center = int(simRes/2)
 #%%
 E_scattering_far, E_scatter_fftshift = cal_Es_far_field(a, n, k, k_dir,
                                                     simRes, simFov,
                                                     working_dis, scale_factor)
 
-E_scattering_near, mask = cal_near_field(simRes, simFov, a, n, lambDa, 0)
+E_scattering_near, mask = cal_near_field(simRes, simFov, a, n, lambDa, -a)
 
 E_scattering_far[mask] = 0
 
+#%%
 plt.figure()
 plt.subplot(231)
 plt.imshow(np.real(E_scattering_near), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
@@ -239,16 +240,38 @@ plt.title('Near Field, Abs')
 plt.colorbar()
 
 plt.subplot(234)
-plt.imshow(np.real(E_scattering_far), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
+plt.imshow(np.real(E_scatter_fftshift), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
 plt.title('Far Field, Real')
 plt.colorbar()
 
 plt.subplot(235)
-plt.imshow(np.imag(E_scattering_far), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
+plt.imshow(np.imag(E_scatter_fftshift), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
 plt.title('Far Field, Imaginary')
 plt.colorbar()
 
 plt.subplot(236)
-plt.imshow(np.abs(E_scattering_far), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
+plt.imshow(np.abs(E_scatter_fftshift), extent=[-simFov/2, simFov/2, -simFov/2, simFov/2])
 plt.title('Far Field, Abs')
 plt.colorbar()
+
+#%%
+#plt.figure()
+#plt.subplot(131)
+#plt.plot(np.abs(E_scattering_far[center, center:]), label='Far')
+#plt.plot(np.abs(E_scattering_near[center, center:]), label='Near')
+#plt.title('Magnitude')
+#plt.legend()
+#
+#plt.subplot(132)
+#plt.plot(np.real(E_scattering_far[center, center:]), label='Far')
+#plt.plot(np.real(E_scattering_near[center, center:]), label='Near')
+#plt.title('Real')
+#plt.legend()
+#
+#plt.subplot(133)
+#plt.plot(np.imag(E_scattering_far[center, center:]), label='Far')
+#plt.plot(np.imag(E_scattering_near[center, center:]), label='Near')
+#plt.title('Imaginary')
+#plt.legend()
+#
+#plt.suptitle(n)
