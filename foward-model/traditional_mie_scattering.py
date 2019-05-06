@@ -2,13 +2,22 @@
 """
 Created on Thu Feb 28 17:34:10 2019
 
-generates images at two planes to verify backpropagation function
+Traditional Mie scattering model where the incident field
+can be a focused beam
+The focused beam is sampled by Monte-carlo sampling thus takes time
+if the number of samples is set higher than 100
+
+Two individual visualization planes are plotted in this demon
+By specify the orientation of the planes when initialze 
+the miescattering class
 
 Editor:
     Shihao Ran
     STIM Laboratory
 """
 
+#%%
+# import packages
 # numpy for most of the data saving and cumputation
 import numpy as np
 # matplotlib for ploting the images
@@ -22,41 +31,14 @@ import scipy.special
 import math
 # import animation for plot animations
 from matplotlib import animation as animation
-# time for timing profiles
-import time
 # random for Monte Carlo Sampling
 import random
+# plane wave class
+import chis.planewave as pw
+# mie scattering class
+import chis.MieScattering as ms
 
-class planewave():
-    #implement all features of a plane wave
-    #   k, E, frequency (or wavelength in a vacuum)--l
-    #   try to enforce that E and k have to be orthogonal
-    
-    #initialization function that sets these parameters when a plane wave is created
-    def __init__ (self, k, E):
-        
-        #self.phi = phi
-        self.k = k/np.linalg.norm(k)                      
-        self.E = E
-        
-        #force E and k to be orthogonal
-        if ( np.linalg.norm(k) > 1e-15 and np.linalg.norm(E) >1e-15):
-            s = np.cross(k, E)              #compute an orthogonal side vector
-            s = s / np.linalg.norm(s)       #normalize it
-            Edir = np.cross(s, k)              #compute new E vector which is orthogonal
-            self.k = k
-            self.E = Edir / np.linalg.norm(Edir) * np.linalg.norm(E)
-    
-    def __str__(self):
-        return str(self.k) + "\n" + str(self.E)     #for verify field vectors use print command
-
-    #function that renders the plane wave given a set of coordinates
-    def evaluate(self, X, Y, Z):
-        k_dot_r = self.k[0] * X + self.k[1] * Y + self.k[2] * Z     #phase term k*r
-        ex = np.exp(1j * k_dot_r)       #E field equation  = E0 * exp (i * (k * r)) here we simply set amplitude as 1
-        Ef = self.E.reshape((3, 1, 1)) * ex
-        return Ef
-    
+#%%    
 class mieScattering:
     
     # parameters used to calculate the fields
@@ -154,7 +136,7 @@ class mieScattering:
         # kd: center planewave of the focused beam
         
         #allocatgge space for the field and initialize it to zero
-        start3 = time.time()
+
         CenterKd = self.k                                       #defualt planewave coming in perpendicular to the surface
         kd = kd / np.linalg.norm(kd)                                #normalize the new planewave
         r = np.sqrt(CenterKd[0] ** 2 + CenterKd[1] ** 2 + CenterKd[2] ** 2)             #radiance of the hemisphere where the k vectors are sampled from
@@ -467,7 +449,7 @@ class mieScattering:
         Es[rMag<self.a] = 0
         Ei[rMag>=self.a] = 0
         # calculate the focused field
-        E_obj = planewave(self.k, self.E)
+        E_obj = pw.planewave(self.k, self.E)
         Ep = E_obj.evaluate(self.x, self.y, self.z)
         Ef = Ep[0,...]
         # initaliza total E field
@@ -560,94 +542,9 @@ def getTotalField(k, k_j, n, res, a, ps, pp, padding, fov, numSample, NA_in, NA_
 #    D_Et, D_Ef = MSI.imgAtDetec(Etot, Ef)
     rVecs = MSI.getrvecs()
 
-    return Etot, Bt, Emask
-    
+    return Etot, Bt, Emask, rVecs
 
-def coeff_b(l, k, n, a):
-    jka = sp.special.spherical_jn(l, k * a)
-    jka_p = sp.special.spherical_jn(l, k * a, derivative=True)
-    jkna = sp.special.spherical_jn(l, k * n * a)
-    jkna_p = sp.special.spherical_jn(l, k * n * a, derivative=True)
-
-    yka = sp.special.spherical_yn(l, k * a)
-    yka_p = sp.special.spherical_yn(l, k * a, derivative=True)
-
-    hka = jka + yka * 1j
-    hka_p = jka_p + yka_p * 1j
-
-    # ai = (2*l + 1) * (1j ** l)
-    bi = jka * jkna_p * n
-    ci = jkna * jka_p
-    di = jkna * hka_p
-    ei = hka * jkna_p * n
-
-    # return ai * (bi - ci) / (di - ei)
-    return (bi - ci) / (di - ei)
-
-
-#compute the coordinates grid in Fourier domain for the calculation of
-#corresponding phase shift value at each pixel
-#return the frequency components at z axis in Fourier domain
-def cal_kz(fov, simRes):
-    #the coordinates in Fourier domain is constructed from the coordinates in
-    #spatial domain, specifically,
-    #1. Get the pixel size in spatial domain, P_size = FOV / Image_Size
-    #2. Fourier domain size, F_size = 1 / P_size
-    #3. Make a grid with [-F_size / 2, F_size / 2, same resolution]
-    #4. Pixel size in Fourier domain will be 1 / Image_size
-    
-    #make grid in Fourier domain
-    x = np.linspace(-simRes/(fov * 2 * 2 * np.pi), simRes/(fov * 2 * 2 * np.pi), simRes)
-    xx, yy = np.meshgrid(x, x)
-    
-    #allocate the frequency components in x and y axis
-    k_xy = np.zeros((simRes, simRes, 2))
-    k_xy[..., 0], k_xy[..., 1] = xx, yy
-    
-    #compute the distance of x, y components in Fourier domain
-    k_para_square = k_xy[...,0]**2 + k_xy[...,1]**2
-    
-    #initialize a z-axis frequency components
-    k_z = np.zeros(xx.shape)
-    
-    #compute kz at each pixel
-    for i in range(len(k_para_square)):
-        for j in range(len(k_para_square)):
-            if k_para_square[i, j] < 1:
-                k_z[i, j] = np.sqrt(1 - k_para_square[i, j])
-    
-    #return it
-    return k_z
-
-
-#propogate the field with the specified frequency components and distance
-    # Et: the field in spatial domain to be propagated
-    # k_z: frequency component in z axis
-    # l: distance to propagate
-def propagate(Et, k_z, l):
-    
-    #compute the phase mask for shifting each pixel of the field
-    phaseMask = np.exp(1j * k_z * l)
-    
-    #Fourier transform of the field and do fft-shift to the Fourier image
-    #so that the center of the Fourier transform is at the origin
-    E_orig = Et
-    fE_orig = np.fft.fft2(E_orig)
-    fE_shift = np.fft.fftshift(fE_orig)
-    
-    #apply phase shift to the field in Fourier domain
-    fE_propagated = fE_shift * phaseMask
-    
-    #inverse shift the image in Fourier domain
-    #then apply inverse Fourier transform the get the spatial image
-    fE_inversae_shift = np.fft.ifftshift(fE_propagated)
-    E_prop = np.fft.ifft2(fE_inversae_shift)
-    
-    #return the propagated field
-    return E_prop
-
-
-
+#%%
 k = [0, 0, -1]
 
 res = 128
@@ -656,129 +553,56 @@ NA_in = 0
 NA_out = 0
 numFrames = 70
 option = 'Horizontal'
-parentDir = r'D:\irimages\irholography\New_QCL\BimSimPython\nAnimation_v3'
 n0 = 1.2
-#n0 = 1.0
+
 fov = 8
 padding = 0
-simRes = (2 * padding + 1) * res
+simRes, simFov = ms.pad(res, fov, padding)
 
 #get the field for the center sphere (big)
 a0 = 1
 #position of the visualization plane, along z axis
 pp = 0
 ps0 = [0, 0, 0]
-Et_distance, B0, Emask0= getTotalField(k, k, n0, res, a0, ps0, pp, padding, fov, numSample, NA_in, NA_out, option)
+Et_h, B0, Emask0, rVecs= getTotalField(k, k, n0, res, a0, ps0, pp, padding, fov, numSample, NA_in, NA_out, option)
 
-#get the z component
-#can optimize the function here by passing in parameters
-#k_z = cal_kz(fov, simRes)
 
-#Et_0_p = propagate(Et_0, k_z, -a0)
+# the field can be propagated along the k direction
+Et_0_p = ms.propagate_2D(simRes, simFov, Et_h, 1)
 
-Et_close, B1, Emask1= getTotalField(k, k, n0, res, a0, ps0, pp, padding, fov, numSample, NA_in, NA_out, 'Vertical')
+Et_v, B1, Emask1, rVecs_v= getTotalField(k, k, n0, res, a0, ps0, pp, padding, fov, numSample, NA_in, NA_out, 'Vertical')
 
-#Et_distance *= Emask1
 
-#noise_perc = 200
-#noise_mask = np.random.randint(-noise_perc, noise_perc, size = np.shape(Et_0)) / 1000000 + 1
-#
-#Et_plus_noise = Et_0 * noise_mask
+noise_perc = 200
+noise_mask = np.random.randint(-noise_perc, noise_perc, size = np.shape(Et_h)) / 1000000 + 1
 
-#
-#plt.figure()
-#plt.subplot(211)
-#plt.plot(np.real(np.squeeze(B0)), label = 'Shihao')
-#plt.plot(np.real(B_david), linestyle = 'dashed', label = 'David')
-#plt.title('B_real')
-#plt.legend()
-#
-#plt.subplot(212)
-#plt.plot(np.imag(np.squeeze(B0)), label = 'Shihao')
-#plt.plot(np.imag(B_david), linestyle = 'dashed', label = 'David')
-#plt.title('B_imag')
-#plt.legend()
-#
-#plt.figure()
-#plt.plot(np.real(np.squeeze(B0)), label = 'real')
-#plt.plot(np.imag(np.squeeze(B0)), linestyle = 'dashed', label = 'imaginary')
-#plt.title('B')
-#plt.legend()
+Et_plus_noise = Et_h * noise_mask
 
+#%%
+# plot images
 plt.figure()
 
 plt.subplot(2, 2, 1)
-plt.imshow(np.real(Et_close))
-plt.title('Real close')
+plt.imshow(np.real(Et_h))
+plt.title('Horizontal Real')
 plt.axis('off')
 plt.colorbar()
 
 plt.subplot(2, 2, 2)
-plt.imshow(np.imag(Et_close))
-plt.title('Imaginary close')
+plt.imshow(np.imag(Et_h))
+plt.title('Horizontal Imaginary')
 plt.axis('off')
 plt.colorbar()
 
 plt.subplot(2, 2, 3)
-plt.imshow(np.real(Et_distance))
-plt.title('Real at distance')
+plt.imshow(np.real(Et_v))
+plt.title('Vertical Real')
 plt.axis('off')
 plt.colorbar()
 
 plt.subplot(2, 2, 4)
-plt.imshow(np.imag(Et_distance))
-plt.title('Imaginary at distance')
+plt.imshow(np.imag(Et_v))
+plt.title('Vertical Imaginary')
 plt.axis('off')
 plt.colorbar()
-#
-#plt.subplot(1, 3, 3)
-#plt.imshow(np.imag(Et_0_p))
-#plt.title('Imaginary')
-#plt.axis('off')
-#plt.colorbar()
-#
-#plt.suptitle('Field propagated')
-#
-#plt.figure()
-#plt.subplot(1, 3, 1)
-#plt.imshow(np.abs(Et_0_p)-np.abs(Et_1))
-#plt.title('Magnitude')
-#plt.axis('off')
-#plt.colorbar()
-#
-#plt.subplot(1, 3, 2)
-#plt.imshow(np.real(Et_0_p)-np.real(Et_1))
-#plt.title('Real')
-#plt.axis('off')
-#plt.colorbar()
-#
-#plt.subplot(1, 3, 3)
-#plt.imshow(np.imag(Et_0_p)-np.imag(Et_1))
-#plt.title('Imaginary')
-#plt.axis('off')
-#plt.colorbar()
-#
-#plt.suptitle('Field bias')
 
-
-#
-#plt.figure()
-#plt.subplot(1, 3, 1)
-#plt.plot(np.abs(B0[0,0,:]))
-#plt.xlabel('Number of Order')
-#plt.ylabel('Value')
-#plt.title('Magnitude')
-#
-#plt.subplot(1, 3, 2)
-#plt.plot(np.real(B0[0,0,:]))
-#plt.xlabel('Number of Order')
-#plt.ylabel('Value')
-#plt.title('Real')
-#
-#plt.subplot(1, 3, 3)
-#plt.plot(np.imag(B0[0,0,:]))
-#plt.xlabel('Number of Order')
-#plt.ylabel('Value')
-#plt.title('Imaginary')
-#
-#plt.suptitle('Coefficient B Ground Truth')

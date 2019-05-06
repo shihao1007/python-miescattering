@@ -81,7 +81,7 @@ def Legendre(order, x):
         
     
 ##for test use
-Et = Et_0
+Et = Et_h
 Ef = np.ones((50, 50), dtype = np.complex128)
 k = np.asarray([0, 0, -1])
 z = 17
