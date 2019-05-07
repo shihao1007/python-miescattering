@@ -10,3 +10,5 @@ and any parameters given by the user.
 corresponding parameters of the simulated sphere.
 
 Note that the inverse model here performs worse than Machine Learning approach.
+
+Please pull chis repository and add it into Python path before running any script.
