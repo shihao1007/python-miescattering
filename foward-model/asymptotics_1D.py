@@ -41,7 +41,7 @@ padding = 1                 # padding
 working_dis = 10000 * (2 * padding + 1)           # working distance
 scale_factor = working_dis * 2 * math.pi * res/fov            # scale factor of the intensity
 NA_in = 0.0
-NA_out = 1.0
+NA_out = 0.7
 
 simRes, simFov = ms.pad(res, fov, padding)
 
@@ -53,11 +53,11 @@ E0 = 1
 #%%
 # get 1-D far field
 E_far_line = ms.far_field(simRes, simFov, working_dis, a, n, 
-                          lambDa, scale_factor, dimention=1)
+                          lambDa, k_dir, scale_factor, dimension=1)
 # get 1-D near line without bandpass filtering
 E_near_line, E_near_x = ms.idhf(simRes, simFov, E_far_line)
 # get 1-D bandpass filter
-bpf_line = ms.bandpass_filter(simRes, simFov, NA_in, NA_out, dimention=1)
+bpf_line = ms.bandpass_filter(simRes, simFov, NA_in, NA_out, dimension=1)
 # get 1-D near field and its sample index
 E_near_line_bp, E_near_x_bp = ms.apply_filter(simRes, simFov, E_far_line, bpf_line)
 # far field with incident plane wave
@@ -67,7 +67,7 @@ F = E_near_line_bp + E0
 
 # get ground truth from a 2-D simulation
 # get far field
-E_far = ms.far_field(simRes, simFov, working_dis, a, n, lambDa, scale_factor)
+E_far = ms.far_field(simRes, simFov, working_dis, a, n, lambDa, k_dir, scale_factor)
 # get near field
 E_near = ms.far2near(E_far) + E0
 # get bandpass filter

@@ -50,7 +50,7 @@ E = [1, 0, 0]               # electric field vector
 E0 = 1
 #%%
 # get far field
-E_far = ms.far_field(simRes, simFov, working_dis, a, n, lambDa, scale_factor)
+E_far = ms.far_field(simRes, simFov, working_dis, a, n, lambDa, k_dir, scale_factor)
 
 # get near field
 E_near = ms.far2near(E_far) + E0
